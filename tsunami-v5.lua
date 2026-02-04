@@ -1,354 +1,530 @@
+local art_string = [[
+
+████████╗░██████╗██╗░░░██╗███╗░░██╗░█████╗░███╗░░░███╗██╗
+╚══██╔══╝██╔════╝██║░░░██║████╗░██║██╔══██╗████╗░████║██║
+░░░██║░░░╚█████╗░██║░░░██║██╔██╗██║███████║██╔████╔██║██║
+░░░██║░░░░╚═══██╗██║░░░██║██║╚████║██╔══██║██║╚██╔╝██║██║
+░░░██║░░░██████╔╝╚██████╔╝██║░╚███║██║░░██║██║░╚═╝░██║██║
+░░░╚═╝░░░╚═════╝░░╚═════╝░╚═╝░░╚══╝╚═╝░░╚═╝╚═╝░░░░░╚═╝╚═╝
+
+]]
+print(art_string)
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "All Scripts Combined",
+    LoadingTitle = "tsa",
+    LoadingSubtitle = "by user request",
+    ConfigurationSaving = {
+        Enabled = false,
+    },
+    Discord = {
+        Enabled = false,
+    },
+    KeySystem = false,
+})
+
+-- Основные сервисы
+local UIS = game:GetService("UserInputService")
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Camera = Workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 
-local player = Players.LocalPlayer
-local gui = player:WaitForChild("PlayerGui")
+-- ============================================
+-- РАЗДЕЛ 1: КРАСИВЫЕ ТРАССЕРЫ (TRACER)
+-- ============================================
+local TracerTab = Window:CreateTab("Tracers", 4483362458)
 
---------------------------------------------------
--- CONFIG
---------------------------------------------------
-local TOGGLE_KEY = Enum.KeyCode.RightShift
-local CLOSE_KEY = Enum.KeyCode.Delete
-local MINIMIZE_KEY = Enum.KeyCode.Insert
-local MenuColor = Color3.fromRGB(0, 150, 255)
+local shooting = false
+local debounce = 0.06
 
-local SHOW_TWEEN = TweenInfo.new(0.45, Enum.EasingStyle.Quint, Enum.EasingDirection.Out, 0, false, 0)
-local HIDE_TWEEN = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0)
-local ELEMENT_TWEEN = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
-local COLOR_TWEEN = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
+local function getMuzzle()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    local tool = char:FindFirstChildOfClass("Tool")
+    if not tool then return nil end
+    local handle = tool:FindFirstChild("Handle") or tool:FindFirstChild("Handle2")
+    if not handle then return nil end
 
---------------------------------------------------
--- GUI
---------------------------------------------------
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "TsunamiMenu"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = gui
+    local barrel = handle:FindFirstChild("Barrel") or 
+                   handle:FindFirstChild("Muzzle") or 
+                   handle:FindFirstChild("GunEnd") or 
+                   handle
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0,720,0,520)
-MainFrame.Position = UDim2.new(0.5,-360,0.5,-260)
-MainFrame.BackgroundColor3 = Color3.fromRGB(10,10,10)
-MainFrame.BackgroundTransparency = 0.85
-MainFrame.BorderSizePixel = 0
-MainFrame.Visible = false
-MainFrame.Parent = ScreenGui
+    local muzzleCFrame = barrel.CFrame
+    if barrel:FindFirstChild("Muzzle") then
+        muzzleCFrame = barrel.Muzzle.CFrame
+    end
 
-local corner = Instance.new("UICorner", MainFrame)
-corner.CornerRadius = UDim.new(0,18)
+    return muzzleCFrame * CFrame.new(0, 0, -2)
+end
 
-local border = Instance.new("UIStroke", MainFrame)
-border.Color = Color3.fromRGB(40,40,40)
-border.Thickness = 1
-border.Transparency = 0.5
+local function createBeautifulTracer()
+    local muzzlePos = getMuzzle()
+    if not muzzlePos then return end
 
-local UIScale = Instance.new("UIScale", MainFrame)
-UIScale.Scale = 0.95
+    muzzlePos = muzzlePos.Position
 
---------------------------------------------------
--- ТЕНЬ
---------------------------------------------------
-local Shadow = Instance.new("ImageLabel")
-Shadow.Size = UDim2.new(1,80,1,80)
-Shadow.Position = UDim2.new(0,-40,0,-40)
-Shadow.BackgroundTransparency = 1
-Shadow.Image = "rbxassetid://6014261993"
-Shadow.ImageColor3 = Color3.fromRGB(0,0,0)
-Shadow.ImageTransparency = 0.85
-Shadow.ScaleType = Enum.ScaleType.Slice
-Shadow.SliceCenter = Rect.new(49,49,450,450)
-Shadow.ZIndex = -1
-Shadow.Parent = MainFrame
+    local direction = (Mouse.Hit.Position - muzzlePos).Unit * 10000
+    local rayParams = RaycastParams.new()
+    rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
+    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
 
---------------------------------------------------
--- ЗАГОЛОВОК
---------------------------------------------------
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1,0,0,66)
-Title.Position = UDim2.new(0,0,0,0)
-Title.BackgroundTransparency = 1
-Title.Text = "TSUNAMI"
-Title.TextColor3 = MenuColor
-Title.TextSize = 36
-Title.Font = Enum.Font.GothamBlack
-Title.TextXAlignment = Enum.TextXAlignment.Center
-Title.ZIndex = 2
-Title.Parent = MainFrame
+    local result = Workspace:Raycast(muzzlePos, direction, rayParams)
+    local hitPos = result and result.Position or (muzzlePos + direction)
 
-local ControlButtons = Instance.new("Frame")
-ControlButtons.Size = UDim2.new(0, 80, 0, 30)
-ControlButtons.Position = UDim2.new(1, -90, 0, 18)
-ControlButtons.BackgroundTransparency = 1
-ControlButtons.Parent = Title
+    local attach0 = Instance.new("Attachment")
+    attach0.WorldPosition = muzzlePos
+    attach0.Parent = Workspace.Terrain
 
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
-MinimizeButton.Position = UDim2.new(0, 0, 0, 0)
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-MinimizeButton.BackgroundTransparency = 0.7
-MinimizeButton.BorderSizePixel = 0
-MinimizeButton.Text = "_"
-MinimizeButton.TextColor3 = Color3.fromRGB(200, 200, 200)
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.TextSize = 20
-MinimizeButton.Parent = ControlButtons
+    local attach1 = Instance.new("Attachment")
+    attach1.WorldPosition = hitPos
+    attach1.Parent = Workspace.Terrain
 
-local MinimizeCorner = Instance.new("UICorner", MinimizeButton)
-MinimizeCorner.CornerRadius = UDim.new(0, 8)
+    local beam = Instance.new("Beam")
+    beam.Attachment0 = attach0
+    beam.Attachment1 = attach1
+    beam.Parent = Workspace.Terrain
+    beam.FaceCamera = true
+    beam.LightEmission = 1
+    beam.LightInfluence = 0
+    beam.Width0 = 0.8
+    beam.Width1 = 0.1
 
-local CloseButton = Instance.new("TextButton")
-CloseButton.Size = UDim2.new(0, 30, 0, 30)
-CloseButton.Position = UDim2.new(1, -30, 0, 0)
-CloseButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-CloseButton.BackgroundTransparency = 0.7
-CloseButton.BorderSizePixel = 0
-CloseButton.Text = "×"
-CloseButton.TextColor3 = Color3.fromRGB(200, 200, 200)
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.TextSize = 20
-CloseButton.Parent = ControlButtons
+    beam.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 255)),
+        ColorSequenceKeypoint.new(0.2, Color3.fromRGB(0, 255, 255)),
+        ColorSequenceKeypoint.new(0.4, Color3.fromRGB(0, 255, 0)),
+        ColorSequenceKeypoint.new(0.6, Color3.fromRGB(255, 255, 0)),
+        ColorSequenceKeypoint.new(0.8, Color3.fromRGB(255, 0, 0)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 100, 255))
+    })
 
-local CloseCorner = Instance.new("UICorner", CloseButton)
-CloseCorner.CornerRadius = UDim.new(0, 8)
+    beam.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.1),
+        NumberSequenceKeypoint.new(0.7, 0.3),
+        NumberSequenceKeypoint.new(1, 1)
+    })
 
-local Subtitle = Instance.new("TextLabel")
-Subtitle.Size = UDim2.new(1,0,0,24)
-Subtitle.Position = UDim2.new(0,0,0,42)
-Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "Ragebot Suite"
-Subtitle.TextColor3 = Color3.fromRGB(180,180,180)
-Subtitle.TextSize = 14
-Subtitle.Font = Enum.Font.GothamMedium
-Subtitle.TextXAlignment = Enum.TextXAlignment.Center
-Subtitle.ZIndex = 2
-Subtitle.Parent = MainFrame
+    beam.Texture = "rbxassetid://6022870554"
+    beam.TextureMode = Enum.TextureMode.Stretch
+    beam.TextureSpeed = 20
+    beam.TextureLength = 12
 
---------------------------------------------------
--- TAB BAR
---------------------------------------------------
-local TabBar = Instance.new("Frame")
-TabBar.Size = UDim2.new(1,0,0,56)
-TabBar.Position = UDim2.new(0,0,0,66)
-TabBar.BackgroundTransparency = 0.9
-TabBar.BackgroundColor3 = Color3.fromRGB(15,15,15)
-TabBar.Parent = MainFrame
+    local dist = (hitPos - muzzlePos).Magnitude
+    beam.CurveSize0 = math.random(-5, 5)
+    beam.CurveSize1 = math.random(-15, 15) + dist / 30
 
-local tabBarStroke = Instance.new("UIStroke", TabBar)
-tabBarStroke.Color = Color3.fromRGB(40,40,40)
-tabBarStroke.Thickness = 1
-tabBarStroke.Transparency = 0.7
+    task.delay(0.6, function()
+        attach0:Destroy()
+        attach1:Destroy()
+        beam:Destroy()
+    end)
+end
 
-local ContentFrame = Instance.new("Frame")
-ContentFrame.Size = UDim2.new(1,-28,1,-140)
-ContentFrame.Position = UDim2.new(0,14,0,122)
-ContentFrame.BackgroundTransparency = 1
-ContentFrame.Parent = MainFrame
-
---------------------------------------------------
--- ВКЛАДКИ
---------------------------------------------------
-local tabs = {"Globals", "Hitscan", "Visuals", "Menu"}
-local tabButtons = {}
-local tabContents = {}
-
--- Создание вкладок
-for i, tabName in ipairs(tabs) do
-    -- Кнопка вкладки
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0,140,1,-10)
-    btn.Position = UDim2.new(0,18+(i-1)*148,0,5)
-    btn.BackgroundColor3 = Color3.fromRGB(25,25,25)
-    btn.BackgroundTransparency = 0.7
-    btn.BorderSizePixel = 0
-    btn.Text = tabName
-    btn.TextColor3 = Color3.fromRGB(190,190,190)
-    btn.Font = Enum.Font.GothamSemibold
-    btn.TextSize = 16
-    btn.Parent = TabBar
-    
-    local btnCorner = Instance.new("UICorner", btn)
-    btnCorner.CornerRadius = UDim.new(0,12)
-    
-    -- Контент вкладки
-    local contentFrame = Instance.new("ScrollingFrame")
-    contentFrame.Size = UDim2.new(1,0,1,0)
-    contentFrame.BackgroundTransparency = 1
-    contentFrame.ScrollBarThickness = 0
-    contentFrame.ScrollBarImageTransparency = 1
-    contentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    contentFrame.CanvasSize = UDim2.new(0,0,0,0)
-    contentFrame.Visible = i == 1
-    contentFrame.Parent = ContentFrame
-    
-    local list = Instance.new("UIListLayout", contentFrame)
-    list.Padding = UDim.new(0,14)
-    
-    -- Сохраняем ссылки
-    tabButtons[tabName] = btn
-    tabContents[tabName] = contentFrame
-    
-    -- Обработчик клика
-    btn.MouseButton1Click:Connect(function()
-        for _, content in pairs(tabContents) do
-            content.Visible = false
+UIS.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool") then
+            shooting = true
+            task.spawn(function()
+                while shooting and task.wait(debounce) do
+                    createBeautifulTracer()
+                end
+            end)
         end
-        for _, button in pairs(tabButtons) do
-            button.BackgroundColor3 = Color3.fromRGB(25,25,25)
-            button.TextColor3 = Color3.fromRGB(190,190,190)
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        shooting = false
+    end
+end)
+
+local TracerSection = TracerTab:CreateSection("Tracer Settings")
+local debounceSlider = TracerTab:CreateSlider({
+    Name = "Tracer Density",
+    Range = {0.01, 0.5},
+    Increment = 0.01,
+    CurrentValue = 0.06,
+    Callback = function(value)
+        debounce = value
+    end,
+})
+
+-- ============================================
+-- РАЗДЕЛ 2: САЙЛЕНТ АИМ (AIM)
+-- ============================================
+local AimTab = Window:CreateTab("Silent Aim", 4483362458)
+
+getgenv().Prediction = 0.18
+getgenv().FOV = 150
+getgenv().AimKey = "c"
+getgenv().DontShootThesePeople = {
+    "AimLockPsycho";
+    "JakeTheMiddleMan";
+}
+
+local SilentAim = true
+local connections = getconnections(game:GetService("LogService").MessageOut)
+for _, v in ipairs(connections) do
+    v:Disable()
+end
+
+local FOV_CIRCLE = Drawing.new("Circle")
+FOV_CIRCLE.Visible = true
+FOV_CIRCLE.Filled = false
+FOV_CIRCLE.Thickness = 2
+FOV_CIRCLE.Transparency = 1
+FOV_CIRCLE.Color = Color3.new(0, 1, 0)
+FOV_CIRCLE.Radius = getgenv().FOV
+FOV_CIRCLE.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+local NameLabel = Drawing.new("Text")
+NameLabel.Visible = false
+NameLabel.Size = 22
+NameLabel.Center = true
+NameLabel.Outline = true
+NameLabel.Font = 2
+NameLabel.Color = Color3.new(1, 1, 1)
+NameLabel.Text = ""
+
+local HealthBarBG = Drawing.new("Square")
+HealthBarBG.Visible = false
+HealthBarBG.Filled = true
+HealthBarBG.Color = Color3.fromRGB(35, 35, 35)
+HealthBarBG.Transparency = 0.6
+HealthBarBG.Size = Vector2.new(180, 10)
+HealthBarBG.Position = Vector2.new(0, 0)
+HealthBarBG.Thickness = 1
+
+local HealthBarFG = Drawing.new("Square")
+HealthBarFG.Visible = false
+HealthBarFG.Filled = true
+HealthBarFG.Color = Color3.new(1, 0, 0)
+HealthBarFG.Transparency = 0
+HealthBarFG.Size = Vector2.new(180, 10)
+HealthBarFG.Position = Vector2.new(0, 0)
+HealthBarFG.Thickness = 1
+
+local InfoLabel = Drawing.new("Text")
+InfoLabel.Visible = false
+InfoLabel.Size = 16
+InfoLabel.Center = true
+InfoLabel.Outline = true
+InfoLabel.Font = 2
+InfoLabel.Color = Color3.new(1, 1, 1)
+InfoLabel.Text = ""
+
+local function getIgnoreList()
+    local ignore = {Camera}
+    if LocalPlayer.Character then
+        table.insert(ignore, LocalPlayer.Character)
+    end
+    return ignore
+end
+
+local function findTarget()
+    local Distance = math.huge
+    local Target = nil
+    local ignoreList = getIgnoreList()
+    for _, v in pairs(Players:GetPlayers()) do
+        if not table.find(getgenv().DontShootThesePeople, v.Name) and v ~= LocalPlayer then
+            local Enemy = v.Character
+            if Enemy and Enemy:FindFirstChild("Head") and Enemy:FindFirstChild("HumanoidRootPart") and Enemy:FindFirstChild("Humanoid") and Enemy.Humanoid.Health > 0 then
+                local CastingFrom = CFrame.new(Camera.CFrame.Position, Enemy.Head.CFrame.Position) * CFrame.new(0, 0, -4)
+                local RayCast = Ray.new(CastingFrom.Position, CastingFrom.LookVector * 9000)
+                local HitPart, HitPos = Workspace:FindPartOnRayWithIgnoreList(RayCast, ignoreList)
+                if HitPos then
+                    local HeadWorld = (Enemy.Head.Position - HitPos).Magnitude
+                    if HeadWorld < 4 then
+                        local viewportPoint = Camera:WorldToViewportPoint(Enemy.Head.Position)
+                        local onScreen = viewportPoint.Z > 0
+                        if onScreen then
+                            local HeadPartPosition = Vector2.new(viewportPoint.X, viewportPoint.Y)
+                            local MouseScreenPos = Vector2.new(Mouse.X, Mouse.Y + 36)
+                            local Real_Magnitude = (MouseScreenPos - HeadPartPosition).Magnitude
+                            if Real_Magnitude < Distance and Real_Magnitude < FOV_CIRCLE.Radius then
+                                Distance = Real_Magnitude
+                                Target = Enemy
+                            end
+                        end
+                    end
+                end
+            end
         end
-        
-        contentFrame.Visible = true
-        btn.BackgroundColor3 = MenuColor
-        btn.BackgroundTransparency = 0.4
-        btn.TextColor3 = Color3.new(1,1,1)
-    end)
+    end
+    return Target
 end
 
--- Активация первой вкладки
-tabButtons.Globals.BackgroundColor3 = MenuColor
-tabButtons.Globals.BackgroundTransparency = 0.4
-tabButtons.Globals.TextColor3 = Color3.new(1,1,1)
-
---------------------------------------------------
--- БАЗОВАЯ ФУНКЦИОНАЛЬНОСТЬ
---------------------------------------------------
-local visible = false
-local isAnimating = false
-local minimized = false
-
--- Показ меню
-local function ShowMenu()
-    if isAnimating then return end
-    isAnimating = true
-    
-    MainFrame.Visible = true
-    local scaleTween = TweenService:Create(UIScale, SHOW_TWEEN, {Scale = 1})
-    scaleTween:Play()
-    
-    scaleTween.Completed:Connect(function()
-        isAnimating = false
-        visible = true
-    end)
-end
-
--- Скрытие меню
-local function HideMenu()
-    if isAnimating then return end
-    isAnimating = true
-    
-    local scaleTween = TweenService:Create(UIScale, HIDE_TWEEN, {Scale = 0.95})
-    scaleTween:Play()
-    
-    scaleTween.Completed:Connect(function()
-        MainFrame.Visible = false
-        isAnimating = false
-        visible = false
-    end)
-end
-
--- Сворачивание/разворачивание
-local function ToggleMinimize()
-    if isAnimating or not visible then return end
-    isAnimating = true
-    
-    minimized = not minimized
-    
-    if minimized then
-        local sizeTween = TweenService:Create(MainFrame,
-            TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            {Size = UDim2.new(0,720,0,100)}
-        )
-        TabBar.Visible = false
-        ContentFrame.Visible = false
-        sizeTween:Play()
-    else
-        local sizeTween = TweenService:Create(MainFrame,
-            TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            {Size = UDim2.new(0,720,0,520)}
-        )
-        sizeTween:Play()
-        sizeTween.Completed:Connect(function()
-            TabBar.Visible = true
-            ContentFrame.Visible = true
-            isAnimating = false
+local function MoveFovCircle()
+    pcall(function()
+        local DoIt = true
+        spawn(function()
+            while DoIt do
+                task.wait()
+                FOV_CIRCLE.Position = Vector2.new(Mouse.X, (Mouse.Y + 36))
+            end
         end)
-    end
+    end)
 end
+coroutine.wrap(MoveFovCircle)()
 
--- Обработчики кнопок
-MinimizeButton.MouseButton1Click:Connect(ToggleMinimize)
-CloseButton.MouseButton1Click:Connect(HideMenu)
+Mouse.KeyDown:Connect(function(KeyPressed)
+    if KeyPressed == (getgenv().AimKey:lower()) then
+        if SilentAim == false then
+            FOV_CIRCLE.Color = Color3.new(0, 1, 0)
+            SilentAim = true
+        elseif SilentAim == true then
+            FOV_CIRCLE.Color = Color3.new(1, 0, 0)
+            SilentAim = false
+        end
+    end
+end)
 
--- Обработчики клавиш
-UserInputService.InputBegan:Connect(function(input, gp)
+Mouse.KeyDown:Connect(function(Rejoin)
+    if Rejoin == "=" then
+        game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if not SilentAim then
+        NameLabel.Visible = false
+        HealthBarBG.Visible = false
+        HealthBarFG.Visible = false
+        InfoLabel.Visible = false
+        return
+    end
+
+    local Target = findTarget()
+    if Target then
+        local player = Players:GetPlayerFromCharacter(Target)
+        local hum = Target:FindFirstChild("Humanoid")
+        if hum and hum.Health > 0 and player then
+            local name = player.Name
+            local hp = math.floor(hum.Health)
+            local maxhp = hum.MaxHealth
+            local hpperc = hp / maxhp
+            local lhrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local thrp = Target:FindFirstChild("HumanoidRootPart")
+            local dist = 0
+            if lhrp and thrp then
+                dist = math.floor((thrp.Position - lhrp.Position).Magnitude)
+            end
+
+            local hudX = FOV_CIRCLE.Position.X
+            local hudBaseY = FOV_CIRCLE.Position.Y + FOV_CIRCLE.Radius + 30
+
+            NameLabel.Text = name
+            NameLabel.Position = Vector2.new(hudX, hudBaseY - 32)
+            NameLabel.Visible = true
+
+            local barX = hudX - 90
+            local barY = hudBaseY - 10
+            HealthBarBG.Position = Vector2.new(barX, barY)
+            HealthBarBG.Visible = true
+
+            HealthBarFG.Position = Vector2.new(barX, barY)
+            HealthBarFG.Size = Vector2.new(180 * hpperc, 10)
+            local r = math.max(0, 1 - hpperc * 2)
+            local g = math.min(1, hpperc * 2)
+            HealthBarFG.Color = Color3.new(r, g, 0)
+            HealthBarFG.Visible = true
+
+            InfoLabel.Text = "Dist: " .. dist .. " HP: " .. hp .. "/" .. maxhp
+            InfoLabel.Position = Vector2.new(hudX, hudBaseY + 8)
+            InfoLabel.Visible = true
+
+            return
+        end
+    end
+
+    NameLabel.Visible = false
+    HealthBarBG.Visible = false
+    HealthBarFG.Visible = false
+    InfoLabel.Visible = false
+end)
+
+local oldIndex = nil
+oldIndex = hookmetamethod(game, "__index", function(self, Index)
+    local Screw = oldIndex(self, Index)
+    local kalk = Mouse
+    local cc = "hit"
+    if self == kalk and (Index:lower() == cc) then
+        if not SilentAim then
+            return Screw
+        end
+        local Target = findTarget()
+        if Target and Target:FindFirstChild("Head") and Target:FindFirstChild("Humanoid") and Target.Humanoid.Health > 0 then
+            local Madox = Target.Head
+            local Formulate = Madox.CFrame + (Madox.AssemblyLinearVelocity * getgenv().Prediction)
+            return Formulate
+        end
+    end
+    return Screw
+end)
+
+local AimSection = AimTab:CreateSection("Silent Aim Settings")
+local predictionSlider = AimTab:CreateSlider({
+    Name = "Prediction",
+    Range = {0.01, 0.5},
+    Increment = 0.01,
+    CurrentValue = 0.18,
+    Callback = function(value)
+        getgenv().Prediction = value
+    end,
+})
+
+local fovSlider = AimTab:CreateSlider({
+    Name = "FOV Radius",
+    Range = {50, 500},
+    Increment = 10,
+    CurrentValue = 150,
+    Callback = function(value)
+        getgenv().FOV = value
+        FOV_CIRCLE.Radius = value
+    end,
+})
+
+local keybindPicker = AimTab:CreateKeybind({
+    Name = "Toggle Key",
+    CurrentKeybind = "C",
+    Callback = function(key)
+        getgenv().AimKey = string.lower(key)
+    end,
+})
+
+local whitelistInput = AimTab:CreateInput({
+    Name = "Add to Whitelist",
+    PlaceholderText = "Username",
+    Callback = function(text)
+        if text ~= "" then
+            table.insert(getgenv().DontShootThesePeople, text)
+        end
+    end,
+})
+
+-- ============================================
+-- РАЗДЕЛ 3: СПИД (SPEED)
+-- ============================================
+local SpeedTab = Window:CreateTab("Speed", 4483362458)
+
+local isRunning = false
+local multiplier = 1.5
+
+task.spawn(function()
+    local hint = Instance.new("Hint", workspace)
+    hint.Text = "Speed на Q загружен! (Hold Q to fly)"
+    task.wait(3)
+    hint:Destroy()
+end)
+
+UIS.InputBegan:Connect(function(i, gp)
     if gp then return end
-    
-    if input.KeyCode == TOGGLE_KEY then
-        if visible then 
-            HideMenu() 
-        else 
-            ShowMenu() 
+    if i.KeyCode == Enum.KeyCode.Q then
+        isRunning = true
+        while isRunning do
+            task.wait()
+            local char = LocalPlayer.Character
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    hrp.CFrame = hrp.CFrame + hrp.CFrame.LookVector * multiplier
+                end
+            end
         end
-    elseif input.KeyCode == MINIMIZE_KEY and visible then
-        ToggleMinimize()
-    elseif input.KeyCode == CLOSE_KEY and visible then
-        HideMenu()
     end
 end)
 
--- Анимации при наведении
-MinimizeButton.MouseEnter:Connect(function()
-    TweenService:Create(MinimizeButton, ELEMENT_TWEEN, {
-        BackgroundTransparency = 0.5,
-        TextColor3 = Color3.new(1,1,1)
-    }):Play()
+UIS.InputEnded:Connect(function(i, gp)
+    if gp then return end
+    if i.KeyCode == Enum.KeyCode.Q then
+        isRunning = false
+    end
 end)
 
-MinimizeButton.MouseLeave:Connect(function()
-    TweenService:Create(MinimizeButton, ELEMENT_TWEEN, {
-        BackgroundTransparency = 0.7,
-        TextColor3 = Color3.fromRGB(200,200,200)
-    }):Play()
+LocalPlayer.CharacterAdded:Connect(function()
+    wait(1)
 end)
 
-CloseButton.MouseEnter:Connect(function()
-    TweenService:Create(CloseButton, ELEMENT_TWEEN, {
-        BackgroundColor3 = Color3.fromRGB(255,50,50),
-        BackgroundTransparency = 0.3,
-        TextColor3 = Color3.new(1,1,1)
-    }):Play()
-end)
+local SpeedSection = SpeedTab:CreateSection("Speed Settings")
+local speedSlider = SpeedTab:CreateSlider({
+    Name = "Speed Multiplier",
+    Range = {0.1, 5},
+    Increment = 0.1,
+    CurrentValue = 1.5,
+    Callback = function(value)
+        multiplier = value
+    end,
+})
 
-CloseButton.MouseLeave:Connect(function()
-    TweenService:Create(CloseButton, ELEMENT_TWEEN, {
-        BackgroundColor3 = Color3.fromRGB(40,40,40),
-        BackgroundTransparency = 0.7,
-        TextColor3 = Color3.fromRGB(200,200,200)
-    }):Play()
-end)
+-- ============================================
+-- РАЗДЕЛ 4: NO RECOIL
+-- ============================================
+local RecoilTab = Window:CreateTab("No Recoil", 4483362458)
 
--- Анимации для кнопок вкладок
-for _, btn in pairs(tabButtons) do
-    btn.MouseEnter:Connect(function()
-        if not tabContents[btn.Text].Visible then
-            TweenService:Create(btn, ELEMENT_TWEEN, {
-                BackgroundTransparency = 0.6,
-                TextColor3 = Color3.fromRGB(220,220,220)
-            }):Play()
+getgenv().NoRecoilKey = "b"
+local NoRecoilEnabled = true
+getgenv().NoRecoilEnabled = true
+
+Mouse.KeyDown:Connect(function(KeyPressed)
+    if KeyPressed == (getgenv().NoRecoilKey:lower()) then
+        if NoRecoilEnabled == false then
+            NoRecoilEnabled = true
+            getgenv().NoRecoilEnabled = true
+        elseif NoRecoilEnabled == true then
+            NoRecoilEnabled = false
+            getgenv().NoRecoilEnabled = false
         end
-    end)
-    
-    btn.MouseLeave:Connect(function()
-        if not tabContents[btn.Text].Visible then
-            TweenService:Create(btn, ELEMENT_TWEEN, {
-                BackgroundTransparency = 0.7,
-                TextColor3 = Color3.fromRGB(190,190,190)
-            }):Play()
-        end
-    end)
+    end
+end)
+
+local function isframework(scriptInstance)
+    if tostring(scriptInstance) == "Framework" then
+        return true
+    end
+    return false
 end
 
-print("[TSUNAMI] Ragebot menu v4 loaded successfully!")
-print("[TSUNAMI] Controls: RightShift - Toggle, Insert - Minimize, Delete - Close")
+local function checkArgs(instance, index)
+    if tostring(instance):lower():find("camera") and tostring(index) == "CFrame" then
+        return true
+    end
+    return false
+end
+
+local old_newindex
+old_newindex = hookmetamethod(game, "__newindex", function(self, index, value)
+    local callingScr = getcallingscript()
+    if getgenv().NoRecoilEnabled and isframework(callingScr) and checkArgs(self, index) then
+        return
+    end
+    return old_newindex(self, index, value)
+end)
+
+local RecoilSection = RecoilTab:CreateSection("No Recoil Settings")
+local recoilKeybind = RecoilTab:CreateKeybind({
+    Name = "Toggle Key",
+    CurrentKeybind = "B",
+    Callback = function(key)
+        getgenv().NoRecoilKey = string.lower(key)
+    end,
+})
+
+-- ============================================
+-- ИНФОРМАЦИОННЫЙ РАЗДЕЛ
+-- ============================================
+local InfoTab = Window:CreateTab("Info", 4483362458)
+local InfoSection = InfoTab:CreateSection("Instructions")
+
+InfoTab:CreateLabel("Tracers: Automatically appear when shooting")
+InfoTab:CreateLabel("Silent Aim: Press " .. getgenv().AimKey .. " to toggle")
+InfoTab:CreateLabel("Speed: Hold Q to move fast")
+InfoTab:CreateLabel("No Recoil: Press " .. getgenv().NoRecoilKey .. " to toggle")
+InfoTab:CreateLabel("Rejoin: Press = to rejoin")
+
+Rayfield:LoadConfiguration()
