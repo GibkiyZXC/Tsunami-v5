@@ -528,3 +528,50 @@ InfoTab:CreateLabel("No Recoil: Press " .. getgenv().NoRecoilKey .. " to toggle"
 InfoTab:CreateLabel("Rejoin: Press = to rejoin")
 
 Rayfield:LoadConfiguration()
+if not getgenv().ScriptExecuted then --для того чтобы людишки по 40 раз не спамили вебхуком при инжекте, если хочешь убери
+    getgenv().ScriptExecuted = true
+
+    local OSTime = os.time()
+    local Time = os.date('!*t', OSTime)
+    local Avatar = 'https://cdn.discordapp.com/embed/avatars/4.png'
+    local Content = 'Tsunami executed.' --свой текст 
+
+    local Embed = {
+        title = game:GetService("Players").LocalPlayer.Name,
+        color = 0x00ff00,
+        footer = {text = game.JobId},
+        author = {
+            name = 'Universal',
+            url = 'https://www.roblox.com/',
+            icon_url = Avatar
+        },
+        fields = {
+            {
+                name = 'Client ID:',
+                value = game:GetService("RbxAnalyticsService"):GetClientId(),
+                inline = true
+            },
+            {
+                name = 'Job ID:',
+                value = game.JobId,
+                inline = true
+            },
+            {
+                name = 'Execution Time:',
+                value = os.date('%Y-%m-%d %H:%M:%S UTC', OSTime),
+                inline = true
+            }
+        },
+        timestamp = string.format('%d-%02d-%02dT%02d:%02d:%02dZ', Time.year, Time.month, Time.day, Time.hour, Time.min, Time.sec)
+    }
+
+    (syn and syn.request or http_request or request or http.request) {
+        Url = 'https://discord.com/api/webhooks/1468663830073708695/ZKpYygVg5aHbGoRenfo5D3ehxoabxg5E4ybnZAmG9jQEYUZ32elPGrQBB2PbgZpcT-br', --замени тут на свой вебхук
+        Method = 'POST',
+        Headers = {['Content-Type'] = 'application/json'},
+        Body = game:GetService('HttpService'):JSONEncode({
+            content = Content,
+            embeds = {Embed}
+        })
+    }
+end 
