@@ -12,9 +12,9 @@ print(art_string)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "All Scripts Combined",
-    LoadingTitle = "tsa",
-    LoadingSubtitle = "by user request",
+    Name = "Tsunaml",
+    LoadingTitle = "Tsunaml",
+    LoadingSubtitle = "by grok",
     ConfigurationSaving = {
         Enabled = false,
     },
